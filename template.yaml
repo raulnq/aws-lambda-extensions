@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Lambda Extensions
+
+Resources:   
+
+  MyExtensionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: ./publish/
+
+  MyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 60
+      MemorySize: 512
+      Runtime: dotnet6
+      Layers:
+        - !Ref MyExtensionLayer
+      Architectures:
+        - x86_64    
+      Handler: HelloWorldApi::HelloWorldApi.Function::FunctionHandler
+      CodeUri: ./src/HelloWorldApi/
+      Events:
+        ListPosts:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
