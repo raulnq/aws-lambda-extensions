@@ -66,9 +66,7 @@ namespace MyExtension
 
                 httpClient.DefaultRequestHeaders.Add("Lambda-Extension-Identifier", id);
 
-                var hasNext = true;
-
-                while (hasNext)
+                while (true)
                 {
                     var payload = await GetNext(httpClient);
 
