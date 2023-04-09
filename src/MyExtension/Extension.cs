@@ -1,6 +1,8 @@
 ﻿using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.Json;
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Options;
 
 namespace MyExtension
 {
@@ -14,6 +16,8 @@ namespace MyExtension
 
         private readonly Uri _subscriptionUrl;
 
+        private readonly Uri _targetUrl;
+
         public Extension(string? name)
         {
             _name = name ?? throw new ArgumentNullException(nameof(name), "Extension name cannot be null");
@@ -25,6 +29,43 @@ namespace MyExtension
             _nextUrl = new Uri(apiUri, $"2020-01-01/extension/event/next");
 
             _subscriptionUrl = new Uri(apiUri, $"2022-07-01/telemetry");
+
+            _targetUrl = new Uri(Environment.GetEnvironmentVariable("TOOL_API_URL")!);
+        }
+
+        private async Task Subscribe(HttpClient httpClient)
+        {
+            var options = new JsonSerializerOptions();
+
+            options.Converters.Add(new JsonStringEnumConverter());
+
+            var body = @"
+{
+   ""schemaVersion"": ""2022-07-01"",
+   ""types"": [
+        ""function""
+   ],
+   ""buffering"": {
+        ""maxItems"": 1000,
+        ""maxBytes"": 262144,
+        ""timeoutMs"": 100
+   },
+   ""destination"": {
+        ""protocol"": ""HTTP"",
+        ""URI"": ""http://sandbox.localdomain:8080""
+   }
+}";
+
+            using var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+            using (var response = await httpClient.PutAsync(_subscriptionUrl, content))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"[{_name}] Error response received for subscription request: {await response.Content.ReadAsStringAsync()}");
+                    response.EnsureSuccessStatusCode();
+                }
+            }
         }
 
         private async Task<string> Register(HttpClient httpClient)
@@ -56,7 +97,7 @@ namespace MyExtension
             }
         }
 
-        public async Task Start()
+        public async Task Start(ConcurrentQueue<string> queue)
         {
             using (var httpClient = new HttpClient() { Timeout = Timeout.InfiniteTimeSpan })
             {
@@ -66,6 +107,8 @@ namespace MyExtension
 
                 httpClient.DefaultRequestHeaders.Add("Lambda-Extension-Identifier", id);
 
+                await Subscribe(httpClient);
+
                 while (true)
                 {
                     var payload = await GetNext(httpClient);
@@ -73,10 +116,28 @@ namespace MyExtension
                     if(payload.EventType== EventType.SHUTDOWN)
                     {
                         Console.WriteLine($"[{_name}] Shutting down extension: {payload.ShutdownReason}");
+
+                        await SendLogs(queue);
+
                         break;
                     }
 
                     Console.WriteLine($"[{_name}] Handling invoke from extension: {payload.RequestId}");
+
+                    await SendLogs(queue);
+                }
+            }
+        }
+
+        public async Task SendLogs(ConcurrentQueue<string> queue)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                while (queue.TryDequeue(out var item))
+                {
+                    var content = new StringContent(item, Encoding.UTF8, "application/json");
+
+                    await httpClient.PostAsync(_targetUrl, content);
                 }
             }
         }

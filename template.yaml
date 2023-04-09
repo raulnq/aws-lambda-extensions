@@ -3,8 +3,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   Lambda Extensions
 
-Resources:   
-
+Resources:
   MyExtensionLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -16,6 +15,9 @@ Resources:
       Timeout: 60
       MemorySize: 512
       Runtime: dotnet6
+      Environment:
+        Variables:
+          TOOL_API_URL: https://webhook.site/24da577c-e3ec-44f5-9b06-ba371203a54f
       Layers:
         - !Ref MyExtensionLayer
       Architectures:

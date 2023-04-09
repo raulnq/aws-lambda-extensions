@@ -8,6 +8,10 @@ namespace HelloWorldApi
     {
         public async Task<APIGatewayHttpApiV2ProxyResponse> FunctionHandler(APIGatewayHttpApiV2ProxyRequest input, ILambdaContext context)
         {
+            context.Logger.LogInformation($"log from function: {Guid.NewGuid()}");
+
+            await Task.Delay(Random.Shared.Next(25, 100));
+
             return new APIGatewayHttpApiV2ProxyResponse
             {
                 Body = @"{""Message"":""Hello world!""}",
